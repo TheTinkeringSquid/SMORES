@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vite/
+*.log
+target/
+.vscode/*.log
+.vscode/*.cache
+.env*
+!frontend/.env.local

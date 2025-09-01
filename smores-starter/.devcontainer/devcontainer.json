@@ -1,0 +1,22 @@
+{
+  "name": "smores-dev",
+  "dockerComposeFile": [".devcontainer/docker-compose.yml"],
+  "service": "dev",
+  "workspaceFolder": "/workspaces/smores",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+    "ghcr.io/devcontainers/features/rust:1": { "profile": "default" }
+  },
+  "forwardPorts": [8080, 5173, 1883],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  },
+  "postCreateCommand": "echo Dev container ready."
+}

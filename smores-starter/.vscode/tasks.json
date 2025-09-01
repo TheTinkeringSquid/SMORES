@@ -1,0 +1,8 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "backend:run", "type": "shell", "command": "cd backend && cargo run", "problemMatcher": [] },
+    { "label": "frontend:dev", "type": "shell", "command": "cd frontend && npm i && npm run dev", "problemMatcher": [] },
+    { "label": "start:all", "dependsOn": ["backend:run", "frontend:dev"], "dependsOrder": "parallel" }
+  ]
+}
