@@ -1,0 +1,7 @@
+* text=auto
+*.sh eol=lf
+*.rs eol=lf
+*.js eol=lf
+*.ts eol=lf
+*.tsx eol=lf
+Dockerfile eol=lf

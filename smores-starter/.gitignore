@@ -7,3 +7,75 @@ target/
 .vscode/*.cache
 .env*
 !frontend/.env.local
+
+# ---------- OS junk ----------
+.DS_Store
+Thumbs.db
+
+# ---------- Editors ----------
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# ---------- Logs & coverage ----------
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+coverage/
+lcov.info
+*.pid
+
+# ---------- Environment & secrets ----------
+.env
+.env.*
+!.env.example
+**/*.pem
+**/*.key
+**/*.crt
+**/*.pfx
+
+# ---------- Node/React (frontend) ----------
+node_modules/
+**/node_modules/
+dist/
+build/
+**/dist/
+**/build/
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.turbo/
+.next/
+out/
+.vite/
+.svelte-kit/
+storybook-static/
+
+# ---------- Package managers (keep lockfiles, don't ignore) ----------
+# package-lock.json, yarn.lock, and pnpm-lock.yaml SHOULD be committed
+
+# ---------- Rust (backend) ----------
+target/
+**/target/
+**/*.rs.bk
+
+# Cargo artifacts we DO commit (keep these tracked):
+# Cargo.lock  <-- keep for apps/workspaces
+# .cargo/     <-- usually tracked if you add config
+
+# ---------- Containers & tooling ----------
+docker-data/
+**/docker-data/
+*.tar
+
+# ---------- Misc caches ----------
+*.swp
+*.swo
+*.tmp
+tmp/
