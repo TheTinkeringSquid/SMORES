@@ -188,9 +188,18 @@ A receiver node typically reports all wheels → `sensors` is an **array**.
 
 ### 5.4 Reserved subsystems (planned, not in M1)
 
-`solar`, `powertrain`, `hvac`, `lighting`, `security`, `inverter`. Their
-`data` shapes will be added here before implementation. Until then the backend
-stores them as `unknown` and the dashboard may show a generic card.
+Named now so node authors stay consistent; each gets a `data` shape here before
+it is implemented. Until then the backend stores them as `unknown` (never
+dropped, per §1) and the dashboard may show a generic card.
+
+`solar`, `inverter`, `shore_power`, `ems`, `generator`, `water`, `hvac`,
+`fans`, `fridge`, `safety`, `leveling`, `slides`, `awning`, `chassis`,
+`powertrain`, `lighting`, `connectivity`, `cameras`, `infotainment`,
+`location`, `security`, `appliances`.
+
+See [`RV_SYSTEMS.md`](./RV_SYSTEMS.md) for what each subsystem covers on a real
+RV, the signals it exposes, and the open integration path (RV-C, Victron,
+Modbus, BLE) for sourcing its data.
 
 ---
 
