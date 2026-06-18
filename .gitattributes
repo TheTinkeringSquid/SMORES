@@ -1,0 +1,14 @@
+* text=auto
+*.sh eol=lf
+*.rs eol=lf
+*.js eol=lf
+*.ts eol=lf
+*.tsx eol=lf
+*.md eol=lf
+*.toml eol=lf
+*.yml eol=lf
+*.yaml eol=lf
+*.json eol=lf
+*.css eol=lf
+*.html eol=lf
+Dockerfile eol=lf
