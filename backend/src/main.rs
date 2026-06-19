@@ -20,8 +20,17 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
 
-    let cfg = Config::from_env();
-    let state = Arc::new(AppState::new(cfg.stale_after_secs));
+    let cfg = Config::load();
+    let node_stale = cfg
+        .nodes
+        .iter()
+        .map(|n| (n.id.clone(), n.stale_after_seconds))
+        .collect();
+    let state = Arc::new(AppState::new(
+        cfg.stale_after_secs,
+        cfg.thresholds.clone(),
+        node_stale,
+    ));
 
     // MQTT ingress: keeps the state store fresh from telemetry/health/alerts.
     tokio::spawn(mqtt::run(cfg.clone(), state.clone()));
@@ -31,9 +40,25 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(mock::run(cfg.clone()));
     }
 
+    // Alert engine tick: re-evaluate so node-offline alerts fire without telemetry.
+    {
+        let state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+            loop {
+                interval.tick().await;
+                state.tick().await;
+            }
+        });
+    }
+
     let app = api::router(state.clone());
     let listener = tokio::net::TcpListener::bind(cfg.bind_addr).await?;
-    tracing::info!("S.M.O.R.E.S. backend listening on http://{}", cfg.bind_addr);
+    tracing::info!(
+        "{} backend listening on http://{}",
+        cfg.system_name,
+        cfg.bind_addr
+    );
     axum::serve(listener, app).await?;
     Ok(())
 }
