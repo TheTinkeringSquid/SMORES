@@ -1,6 +1,7 @@
-//! In-memory latest-state store. Holds the most recent reading per subsystem
-//! plus a `received_at` wall-clock stamp (for staleness), a per-node registry,
-//! and the active alert list. Persistence (SQLite) arrives in Milestone 2.
+//! In-memory latest-state store plus the alert-threshold engine. Holds the most
+//! recent reading per subsystem (with a `received_at` stamp for staleness), a
+//! per-node registry, and the active alert list. Persistence (SQLite) is a
+//! later Milestone-2 slice.
 
 use std::collections::HashMap;
 
@@ -8,6 +9,7 @@ use chrono::Utc;
 use serde_json::Value;
 use tokio::sync::RwLock;
 
+use crate::config::Thresholds;
 use crate::models::*;
 
 /// A stored reading plus where/when it came from.
@@ -56,26 +58,41 @@ pub struct Store {
 #[derive(Debug)]
 pub struct AppState {
     pub inner: RwLock<Store>,
-    /// A reading/node older than this many seconds is reported as stale.
+    /// Default stale window for readings and for nodes without an override.
     pub stale_after_secs: i64,
+    /// Alert-engine thresholds.
+    pub thresholds: Thresholds,
+    /// Per-node stale overrides from the config registry.
+    pub node_stale: HashMap<String, i64>,
 }
 
 const MAX_ALERTS: usize = 200;
 
 impl AppState {
-    pub fn new(stale_after_secs: i64) -> Self {
+    pub fn new(stale_after_secs: i64, thresholds: Thresholds, node_stale: HashMap<String, i64>) -> Self {
         Self {
             inner: RwLock::default(),
             stale_after_secs,
+            thresholds,
+            node_stale,
         }
     }
 
-    /// True if `received_at` is older than the configured stale window.
+    /// True if a reading's `received_at` is older than the default stale window.
     pub fn is_stale(&self, received_at: Timestamp) -> bool {
         (Utc::now() - received_at).num_seconds() > self.stale_after_secs
     }
 
-    /// Record that a node was just heard from, tracking which subsystems it reports.
+    /// True if a node hasn't been heard from within its (possibly per-node) window.
+    pub fn is_node_stale(&self, node_id: &str, last_seen: Timestamp) -> bool {
+        let limit = self
+            .node_stale
+            .get(node_id)
+            .copied()
+            .unwrap_or(self.stale_after_secs);
+        (Utc::now() - last_seen).num_seconds() > limit
+    }
+
     fn touch_node(store: &mut Store, node_id: &str, subsystem: Option<&str>, seen: Timestamp) {
         let rec = store
             .nodes
@@ -94,13 +111,12 @@ impl AppState {
         }
     }
 
-    /// Parse and apply a telemetry envelope. Unrecognized subsystems are stored
-    /// raw rather than dropped, so new node types work without a backend release.
+    /// Parse and apply a telemetry envelope, then re-run the alert engine.
+    /// Unrecognized subsystems are stored raw rather than dropped (schema §1).
     pub async fn apply_envelope(&self, env: TelemetryEnvelope) {
         let mut store = self.inner.write().await;
         Self::touch_node(&mut store, &env.node_id, Some(&env.subsystem), env.timestamp);
 
-        // Destructure so subsystem-specific arms can move fields out freely.
         let TelemetryEnvelope {
             node_id,
             subsystem,
@@ -129,6 +145,8 @@ impl AppState {
                     .insert(other.to_string(), Stamped::new(data, node_id, source, timestamp));
             }
         }
+
+        Self::evaluate(&mut store, &self.thresholds, &self.node_stale, self.stale_after_secs);
     }
 
     pub async fn apply_health(&self, health: Health) {
@@ -141,12 +159,24 @@ impl AppState {
         }
     }
 
-    /// Apply an alert. `active: false` clears matching alerts (by `id`, else `code`);
-    /// otherwise it is raised (deduped on the same key).
+    /// Apply an externally-published alert (from a node or `system/alerts`).
     pub async fn apply_alert(&self, alert: Alert) {
         let mut store = self.inner.write().await;
-        // Capture the dedupe key by value so the closure doesn't borrow `alert`
-        // (which we move into the list below).
+        Self::upsert(&mut store, alert);
+    }
+
+    /// Periodic re-evaluation so node-offline alerts fire even when no telemetry
+    /// is arriving.
+    pub async fn tick(&self) {
+        let mut store = self.inner.write().await;
+        Self::evaluate(&mut store, &self.thresholds, &self.node_stale, self.stale_after_secs);
+    }
+
+    /// Raise or clear an alert. `active: false` clears matching alerts (by `id`,
+    /// else `code`+`subsystem`); otherwise it is raised, deduped on the same key.
+    fn upsert(store: &mut Store, alert: Alert) {
+        // Capture the dedupe key by value so the closure doesn't borrow `alert`,
+        // which we move into the list below.
         let id = alert.id.clone();
         let code = alert.code.clone();
         let subsystem = alert.subsystem.clone();
@@ -155,15 +185,129 @@ impl AppState {
             _ => a.code == code && a.subsystem == subsystem,
         };
 
+        store.alerts.retain(|a| !key_matches(a));
         if alert.active == Some(false) {
-            store.alerts.retain(|a| !key_matches(a));
             return;
         }
-        store.alerts.retain(|a| !key_matches(a));
         store.alerts.push(alert);
         if store.alerts.len() > MAX_ALERTS {
             let overflow = store.alerts.len() - MAX_ALERTS;
             store.alerts.drain(0..overflow);
+        }
+    }
+
+    fn derived(
+        id: &str,
+        severity: Severity,
+        subsystem: Option<&str>,
+        code: &str,
+        message: String,
+        active: bool,
+    ) -> Alert {
+        Alert {
+            schema: "smores.alert.v1".to_string(),
+            id: Some(id.to_string()),
+            severity,
+            subsystem: subsystem.map(|s| s.to_string()),
+            node_id: None,
+            code: code.to_string(),
+            message,
+            active: Some(active),
+            timestamp: Utc::now(),
+        }
+    }
+
+    /// The alert engine: derive alerts from current readings + node liveness.
+    /// Each rule upserts with `active = condition`, so alerts self-clear once the
+    /// condition resolves.
+    fn evaluate(
+        store: &mut Store,
+        thresholds: &Thresholds,
+        node_stale: &HashMap<String, i64>,
+        default_stale: i64,
+    ) {
+        // Battery: low state of charge.
+        let soc = store.battery.as_ref().and_then(|b| b.data.soc_percent);
+        if let Some(soc) = soc {
+            Self::upsert(
+                store,
+                Self::derived(
+                    "thr-low-soc",
+                    Severity::Warning,
+                    Some("battery"),
+                    "LOW_SOC",
+                    format!(
+                        "House battery SOC {soc:.0}% below {:.0}%",
+                        thresholds.low_soc_percent
+                    ),
+                    soc < thresholds.low_soc_percent,
+                ),
+            );
+        }
+
+        // Tanks: gray/black above the high mark.
+        let tanks = store.tanks.as_ref().map(|s| s.data.clone());
+        if let Some(tanks) = tanks {
+            for t in tanks {
+                if matches!(t.kind, TankKind::Gray | TankKind::Black) {
+                    let label = t.name.clone().unwrap_or_else(|| format!("{:?}", t.kind));
+                    Self::upsert(
+                        store,
+                        Self::derived(
+                            &format!("thr-high-tank-{}", t.id),
+                            Severity::Warning,
+                            Some("tanks"),
+                            "HIGH_TANK",
+                            format!("{label} tank {:.0}% full", t.level_percent),
+                            t.level_percent > thresholds.high_tank_percent,
+                        ),
+                    );
+                }
+            }
+        }
+
+        // TPMS: low pressure or a node-reported alarm.
+        let sensors = store.tpms.as_ref().map(|s| s.data.clone());
+        if let Some(sensors) = sensors {
+            for s in sensors {
+                let active = s.alarm.unwrap_or(false) || s.pressure_kpa < thresholds.low_pressure_kpa;
+                let pos = s.position.replace('_', " ");
+                Self::upsert(
+                    store,
+                    Self::derived(
+                        &format!("thr-low-pressure-{}", s.position),
+                        Severity::Critical,
+                        Some("tpms"),
+                        "LOW_PRESSURE",
+                        format!("{pos} tire pressure {:.0} kPa low", s.pressure_kpa),
+                        active,
+                    ),
+                );
+            }
+        }
+
+        // Nodes: offline past their (possibly per-node) stale window.
+        let now = Utc::now();
+        let offline: Vec<(String, bool)> = store
+            .nodes
+            .values()
+            .map(|n| {
+                let limit = node_stale.get(&n.node_id).copied().unwrap_or(default_stale);
+                (n.node_id.clone(), (now - n.last_seen).num_seconds() > limit)
+            })
+            .collect();
+        for (id, off) in offline {
+            Self::upsert(
+                store,
+                Self::derived(
+                    &format!("node-offline-{id}"),
+                    Severity::Warning,
+                    None,
+                    "NODE_OFFLINE",
+                    format!("Node {id} is offline"),
+                    off,
+                ),
+            );
         }
     }
 }

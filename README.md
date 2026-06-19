@@ -50,6 +50,8 @@ MQTT broker runs as service `mqtt` on port `1883`. VS Code tasks `backend:run`,
 - **[docs/RV_SYSTEMS.md](docs/RV_SYSTEMS.md)** — catalog of real RV systems, the
   data/controls each exposes, open integration paths (RV-C, Victron, Modbus,
   BLE), and the canonical `subsystem` registry.
+- **[docs/API.md](docs/API.md)** — the REST endpoints and the alert engine.
+- **[smores.toml](smores.toml)** — optional config: node registry + alert thresholds.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — dev setup, workflow, and safety policy.
 
 ## Status

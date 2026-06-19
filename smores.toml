@@ -1,0 +1,42 @@
+# S.M.O.R.E.S. configuration (optional).
+#
+# Everything here has a default, so this file is optional — the backend runs
+# without it. Environment variables override the [mqtt] and bind settings.
+# Path: set SMORES_CONFIG, else the backend looks for ./smores.toml then
+# ../smores.toml (so it works run from the repo root or from backend/).
+
+[system]
+name = "S.M.O.R.E.S."
+
+[mqtt]
+host = "mqtt"
+port = 1883
+base_topic = "smores/v1"
+
+# Backend alert engine. Each rule raises an alert while the condition holds and
+# clears it automatically when it resolves.
+[thresholds]
+low_soc_percent = 55.0     # battery LOW_SOC below this
+high_tank_percent = 80.0   # gray/black HIGH_TANK above this
+low_pressure_kpa = 360.0   # tire LOW_PRESSURE below this (~52 psi)
+
+# Node registry. `stale_after_seconds` controls when a node is flagged offline
+# (a NODE_OFFLINE alert is raised). Drivetrain-style nodes want short windows;
+# slow house sensors can tolerate longer.
+[[nodes]]
+id = "battery-node-01"
+name = "House Battery Monitor"
+subsystems = ["battery"]
+stale_after_seconds = 15
+
+[[nodes]]
+id = "tank-node-01"
+name = "Tank Sensors"
+subsystems = ["tanks"]
+stale_after_seconds = 30
+
+[[nodes]]
+id = "tpms-node-01"
+name = "Tire Pressure Monitor"
+subsystems = ["tpms"]
+stale_after_seconds = 20

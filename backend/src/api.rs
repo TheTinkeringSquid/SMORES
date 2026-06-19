@@ -43,7 +43,7 @@ async fn health(State(state): State<Arc<AppState>>) -> Json<SystemHealth> {
     let online_nodes = store
         .nodes
         .values()
-        .filter(|n| !state.is_stale(n.last_seen))
+        .filter(|n| !state.is_node_stale(&n.node_id, n.last_seen))
         .count();
 
     let mut subsystems_present = Vec::new();
@@ -164,7 +164,7 @@ async fn nodes(State(state): State<Arc<AppState>>) -> Json<Vec<NodeView>> {
         .map(|n| NodeView {
             node_id: n.node_id.clone(),
             last_seen: n.last_seen,
-            online: !state.is_stale(n.last_seen),
+            online: !state.is_node_stale(&n.node_id, n.last_seen),
             subsystems: n.subsystems.clone(),
             firmware_version: n.health.as_ref().map(|h| h.firmware_version.clone()),
             status: n.health.as_ref().map(|h| h.status),
