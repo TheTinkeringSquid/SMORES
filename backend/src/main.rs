@@ -1,33 +1,39 @@
-use axum::{routing::get, Json, Router};
-use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
+//! S.M.O.R.E.S. backend entrypoint. Wires config, the in-memory state store,
+//! the MQTT subscriber, the optional mock publisher, and the REST API.
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct BatteryTelemetry {
-    soc_percent: Option<f32>,
-    voltage_v: f32,
-    current_a: Option<f32>,
-    temp_c: Option<f32>,
-    timestamp: String,
-}
+mod api;
+mod config;
+mod mock;
+mod models;
+mod mqtt;
+mod state;
 
-async fn get_battery() -> Json<serde_json::Value> {
-    let sample = BatteryTelemetry {
-        soc_percent: Some(82.5),
-        voltage_v: 13.2,
-        current_a: Some(-4.1),
-        temp_c: Some(28.0),
-        timestamp: "2025-08-13T00:00:00Z".to_string(),
-    };
-    Json(serde_json::json!({ "battery": sample }))
-}
+use std::sync::Arc;
+
+use config::Config;
+use state::AppState;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
-async fn main() {
-    let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
-    let app = Router::new().route("/api/v1/battery", get(get_battery)).layer(cors);
-    let addr: SocketAddr = ([0, 0, 0, 0], 8080).into();
-    println!("Backend on http://{addr}");
-    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app).await.unwrap();
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .init();
+
+    let cfg = Config::from_env();
+    let state = Arc::new(AppState::new(cfg.stale_after_secs));
+
+    // MQTT ingress: keeps the state store fresh from telemetry/health/alerts.
+    tokio::spawn(mqtt::run(cfg.clone(), state.clone()));
+
+    // Mock publisher: makes the stack demonstrable without hardware.
+    if cfg.mock {
+        tokio::spawn(mock::run(cfg.clone()));
+    }
+
+    let app = api::router(state.clone());
+    let listener = tokio::net::TcpListener::bind(cfg.bind_addr).await?;
+    tracing::info!("S.M.O.R.E.S. backend listening on http://{}", cfg.bind_addr);
+    axum::serve(listener, app).await?;
+    Ok(())
 }
