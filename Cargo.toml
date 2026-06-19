@@ -1,0 +1,8 @@
+# S.M.O.R.E.S. Cargo workspace.
+#
+# A shared `models` crate (canonical telemetry types from docs/SCHEMAS.md,
+# reused by the backend and future CAN/RV-C bridges) will be added under
+# crates/ in Milestone 1.
+[workspace]
+resolver = "2"
+members = ["backend"]
