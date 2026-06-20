@@ -117,6 +117,19 @@ event: update
 data: battery
 ```
 
+### `GET /config`
+The effective configuration the settings page renders (read-only): system name,
+alert thresholds, and the declared node registry.
+```json
+{
+  "system_name": "S.M.O.R.E.S.",
+  "thresholds": { "low_soc_percent": 55.0, "high_tank_percent": 80.0, "low_pressure_kpa": 360.0 },
+  "nodes": [
+    { "id": "battery-node-01", "name": "House Battery Monitor", "subsystems": ["battery"], "stale_after_seconds": 15 }
+  ]
+}
+```
+
 ## Alert engine
 
 The backend derives alerts from the latest readings and node liveness, raising

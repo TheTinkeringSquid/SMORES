@@ -312,3 +312,73 @@ body {
 .spark-wrap--fuel {
   color: #c084fc;
 }
+
+/* ---------- Nav ---------- */
+.app__nav {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.app__nav button {
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.app__nav button.active {
+  background: var(--accent);
+  color: #08110f;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- Settings ---------- */
+.settings {
+  display: grid;
+  gap: 16px;
+  max-width: 820px;
+}
+.kvlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.kvlist li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+}
+.kvlist li span:first-child {
+  color: var(--muted);
+}
+.small {
+  font-size: 11px;
+}
+.ntable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ntable th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.ntable td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.ntable tr:last-child td {
+  border-bottom: none;
+}

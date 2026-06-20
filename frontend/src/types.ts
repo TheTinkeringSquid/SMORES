@@ -93,3 +93,22 @@ export interface HistoryPoint {
   ts: string;
   value: number;
 }
+
+export interface Thresholds {
+  low_soc_percent: number;
+  high_tank_percent: number;
+  low_pressure_kpa: number;
+}
+
+export interface NodeConfig {
+  id: string;
+  name?: string | null;
+  subsystems: string[];
+  stale_after_seconds: number;
+}
+
+export interface AppConfig {
+  system_name: string;
+  thresholds: Thresholds;
+  nodes: NodeConfig[];
+}

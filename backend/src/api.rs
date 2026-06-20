@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 use tower_http::cors::{Any, CorsLayer};
 
+use crate::config::{NodeConfig, Thresholds};
 use crate::history::HistoryPoint;
 use crate::models::*;
 use crate::state::AppState;
@@ -35,6 +36,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/alerts", get(alerts))
         .route("/api/v1/history", get(history))
         .route("/api/v1/stream", get(stream))
+        .route("/api/v1/config", get(config))
         .with_state(state)
         .layer(cors)
 }
@@ -226,4 +228,21 @@ async fn stream(
             .map(|key| Ok::<_, Infallible>(SseEvent::default().event("update").data(key)))
     });
     Sse::new(events).keep_alive(KeepAlive::default())
+}
+
+#[derive(Serialize)]
+struct ConfigView {
+    system_name: String,
+    thresholds: Thresholds,
+    nodes: Vec<NodeConfig>,
+}
+
+/// The effective configuration the settings page renders: system name, alert
+/// thresholds, and the declared node registry (read-only).
+async fn config(State(state): State<Arc<AppState>>) -> Json<ConfigView> {
+    Json(ConfigView {
+        system_name: state.system_name.clone(),
+        thresholds: state.thresholds.clone(),
+        nodes: state.nodes.clone(),
+    })
 }

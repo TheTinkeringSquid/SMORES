@@ -9,7 +9,7 @@ use chrono::Utc;
 use serde_json::Value;
 use tokio::sync::{broadcast, RwLock};
 
-use crate::config::Thresholds;
+use crate::config::{NodeConfig, Thresholds};
 use crate::history::{History, HistoryRow};
 use crate::models::*;
 
@@ -71,6 +71,10 @@ pub struct AppState {
     /// `nodes`/`alerts`) to SSE subscribers, so the dashboard can refetch on
     /// change instead of only on a timer.
     pub events: broadcast::Sender<String>,
+    /// System display name (from config).
+    pub system_name: String,
+    /// The declared node registry (surfaced by the settings page).
+    pub nodes: Vec<NodeConfig>,
 }
 
 const MAX_ALERTS: usize = 200;
@@ -81,6 +85,8 @@ impl AppState {
         thresholds: Thresholds,
         node_stale: HashMap<String, i64>,
         history: Option<History>,
+        system_name: String,
+        nodes: Vec<NodeConfig>,
     ) -> Self {
         let (events, _) = broadcast::channel(128);
         Self {
@@ -90,6 +96,8 @@ impl AppState {
             node_stale,
             history,
             events,
+            system_name,
+            nodes,
         }
     }
 

@@ -5,7 +5,7 @@
 
 use std::net::SocketAddr;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -29,7 +29,7 @@ pub struct Config {
     pub thresholds: Thresholds,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
     pub id: String,
     #[serde(default)]
@@ -45,7 +45,7 @@ fn default_stale() -> i64 {
 }
 
 /// Alert-engine thresholds. Missing fields fall back to [`Thresholds::default`].
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Thresholds {
     /// Raise LOW_SOC when battery SOC drops below this percent.
