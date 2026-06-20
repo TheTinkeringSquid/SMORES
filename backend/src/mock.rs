@@ -59,7 +59,7 @@ async fn run_once(cfg: &Config) -> anyhow::Result<()> {
                 "id": "house-1",
                 "name": "House Battery",
                 "soc_percent": (soc * 10.0).round() / 10.0,
-                "voltage_v": (12.2 + soc / 100.0 * 1.4 * 100.0).round() / 100.0,
+                "voltage_v": ((12.2 + soc / 100.0 * 1.4) * 100.0).round() / 100.0,
                 "current_a": (current * 10.0).round() / 10.0,
                 "temp_c": 28.0,
                 "charging_state": if current >= 0.0 { "charging" } else { "discharging" }
