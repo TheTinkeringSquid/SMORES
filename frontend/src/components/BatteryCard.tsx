@@ -1,12 +1,15 @@
-import { useApi } from "../api";
+import { useApi, useHistory } from "../api";
 import type { BatteryResponse } from "../types";
 import { fmt } from "../format";
 import { StatusCard } from "./StatusCard";
 import { Metric } from "./Metric";
+import { Sparkline } from "./Sparkline";
 
 export function BatteryCard() {
   const q = useApi<BatteryResponse>("battery", "/battery");
+  const soc = useHistory("battery", "soc_percent");
   const b = q.data?.battery ?? null;
+  const trend = soc.data?.map((p) => p.value) ?? [];
   return (
     <StatusCard
       title="House Battery"
@@ -19,6 +22,12 @@ export function BatteryCard() {
       {b && (
         <>
           <Metric label="State of charge" value={fmt(b.soc_percent, 1)} unit="%" big />
+          {trend.length > 1 && (
+            <div className="spark-wrap">
+              <Sparkline values={trend} />
+              <span className="spark-label">SOC trend</span>
+            </div>
+          )}
           <div className="metric-row">
             <Metric label="Voltage" value={fmt(b.voltage_v, 2)} unit="V" />
             <Metric label="Current" value={fmt(b.current_a, 1)} unit="A" />

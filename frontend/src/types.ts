@@ -88,3 +88,8 @@ export interface SystemHealth {
   alert_count: number;
   subsystems_present: string[];
 }
+
+export interface HistoryPoint {
+  ts: string;
+  value: number;
+}
