@@ -10,6 +10,7 @@ use serde_json::Value;
 use tokio::sync::RwLock;
 
 use crate::config::Thresholds;
+use crate::history::{History, HistoryRow};
 use crate::models::*;
 
 /// A stored reading plus where/when it came from.
@@ -64,18 +65,85 @@ pub struct AppState {
     pub thresholds: Thresholds,
     /// Per-node stale overrides from the config registry.
     pub node_stale: HashMap<String, i64>,
+    /// Optional SQLite history (None if the DB failed to open).
+    pub history: Option<History>,
 }
 
 const MAX_ALERTS: usize = 200;
 
 impl AppState {
-    pub fn new(stale_after_secs: i64, thresholds: Thresholds, node_stale: HashMap<String, i64>) -> Self {
+    pub fn new(
+        stale_after_secs: i64,
+        thresholds: Thresholds,
+        node_stale: HashMap<String, i64>,
+        history: Option<History>,
+    ) -> Self {
         Self {
             inner: RwLock::default(),
             stale_after_secs,
             thresholds,
             node_stale,
+            history,
         }
+    }
+
+    /// Snapshot current numeric readings into the history DB. Called on a timer;
+    /// builds rows under a read lock, then writes outside the lock (no I/O while
+    /// the store is locked).
+    pub async fn sample(&self) {
+        let Some(history) = &self.history else {
+            return;
+        };
+        let rows = {
+            let store = self.inner.read().await;
+            let now = Utc::now().to_rfc3339();
+            let mut rows: Vec<HistoryRow> = Vec::new();
+
+            if let Some(b) = &store.battery {
+                let push = |rows: &mut Vec<HistoryRow>, metric: &str, value: f64| {
+                    rows.push(HistoryRow {
+                        ts: now.clone(),
+                        node_id: b.node_id.clone(),
+                        subsystem: "battery".to_string(),
+                        metric: metric.to_string(),
+                        value,
+                    });
+                };
+                if let Some(v) = b.data.soc_percent {
+                    push(&mut rows, "soc_percent", v);
+                }
+                push(&mut rows, "voltage_v", b.data.voltage_v);
+                if let Some(v) = b.data.current_a {
+                    push(&mut rows, "current_a", v);
+                }
+            }
+
+            if let Some(t) = &store.tanks {
+                for tank in &t.data {
+                    rows.push(HistoryRow {
+                        ts: now.clone(),
+                        node_id: t.node_id.clone(),
+                        subsystem: "tanks".to_string(),
+                        metric: format!("level_percent:{}", tank.id),
+                        value: tank.level_percent,
+                    });
+                }
+            }
+
+            if let Some(tp) = &store.tpms {
+                for s in &tp.data {
+                    rows.push(HistoryRow {
+                        ts: now.clone(),
+                        node_id: tp.node_id.clone(),
+                        subsystem: "tpms".to_string(),
+                        metric: format!("pressure_kpa:{}", s.position),
+                        value: s.pressure_kpa,
+                    });
+                }
+            }
+            rows
+        };
+        history.insert(&rows).await;
     }
 
     /// True if a reading's `received_at` is older than the default stale window.

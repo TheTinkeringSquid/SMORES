@@ -4,10 +4,15 @@
 
 use std::sync::Arc;
 
-use axum::{extract::State, routing::get, Json, Router};
-use serde::Serialize;
+use axum::{
+    extract::{Query, State},
+    routing::get,
+    Json, Router,
+};
+use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
 
+use crate::history::HistoryPoint;
 use crate::models::*;
 use crate::state::AppState;
 
@@ -25,6 +30,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/tpms", get(tpms))
         .route("/api/v1/nodes", get(nodes))
         .route("/api/v1/alerts", get(alerts))
+        .route("/api/v1/history", get(history))
         .with_state(state)
         .layer(cors)
 }
@@ -177,4 +183,29 @@ async fn nodes(State(state): State<Arc<AppState>>) -> Json<Vec<NodeView>> {
 async fn alerts(State(state): State<Arc<AppState>>) -> Json<Vec<Alert>> {
     let store = state.inner.read().await;
     Json(store.alerts.clone())
+}
+
+#[derive(Deserialize)]
+struct HistoryQuery {
+    subsystem: Option<String>,
+    metric: Option<String>,
+    since: Option<String>,
+    limit: Option<i64>,
+}
+
+/// Trend history for one subsystem+metric, e.g.
+/// `/history?subsystem=battery&metric=soc_percent&limit=200`.
+/// Returns `[]` if history persistence is disabled.
+async fn history(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<HistoryQuery>,
+) -> Json<Vec<HistoryPoint>> {
+    let Some(h) = &state.history else {
+        return Json(Vec::new());
+    };
+    let subsystem = q.subsystem.unwrap_or_else(|| "battery".to_string());
+    let metric = q.metric.unwrap_or_else(|| "soc_percent".to_string());
+    let since = q.since.unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string());
+    let limit = q.limit.unwrap_or(500).clamp(1, 5000);
+    Json(h.query(&subsystem, &metric, &since, limit).await)
 }

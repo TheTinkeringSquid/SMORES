@@ -3,6 +3,7 @@
 
 mod api;
 mod config;
+mod history;
 mod mock;
 mod models;
 mod mqtt;
@@ -26,10 +27,24 @@ async fn main() -> anyhow::Result<()> {
         .iter()
         .map(|n| (n.id.clone(), n.stale_after_seconds))
         .collect();
+    // SQLite history for trend charts (optional — telemetry works without it).
+    let db_path = std::env::var("SMORES_DB").unwrap_or_else(|_| "smores.db".to_string());
+    let history = match history::History::connect(&db_path).await {
+        Ok(h) => {
+            tracing::info!("history db at {db_path}");
+            Some(h)
+        }
+        Err(e) => {
+            tracing::warn!("history disabled ({db_path}): {e}");
+            None
+        }
+    };
+
     let state = Arc::new(AppState::new(
         cfg.stale_after_secs,
         cfg.thresholds.clone(),
         node_stale,
+        history,
     ));
 
     // MQTT ingress: keeps the state store fresh from telemetry/health/alerts.
@@ -48,6 +63,18 @@ async fn main() -> anyhow::Result<()> {
             loop {
                 interval.tick().await;
                 state.tick().await;
+            }
+        });
+    }
+
+    // History sampler: snapshot numeric readings into SQLite every 10s.
+    {
+        let state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+            loop {
+                interval.tick().await;
+                state.sample().await;
             }
         });
     }

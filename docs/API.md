@@ -85,6 +85,25 @@ backend-derived by the alert engine.
 ]
 ```
 
+### `GET /history`
+Trend history for one subsystem+metric, sampled into SQLite every 10s. Returns
+`[]` if history persistence is disabled (DB failed to open).
+
+Query params: `subsystem` (default `battery`), `metric` (default `soc_percent`),
+`since` (RFC 3339, default epoch), `limit` (default 500, max 5000). Metric keys:
+`soc_percent` / `voltage_v` / `current_a` (battery), `level_percent:<tank_id>`
+(tanks), `pressure_kpa:<position>` (tpms).
+
+```
+GET /history?subsystem=battery&metric=soc_percent&limit=200
+```
+```json
+[
+  { "ts": "2026-06-18T20:00:00Z", "value": 78.2 },
+  { "ts": "2026-06-18T20:00:10Z", "value": 77.9 }
+]
+```
+
 ## Alert engine
 
 The backend derives alerts from the latest readings and node liveness, raising
@@ -103,4 +122,5 @@ live in `smores.toml` under `[thresholds]`.
 See [`smores.toml`](../smores.toml). Connection settings can also be set via env
 vars: `SMORES_BIND`, `SMORES_MQTT_HOST`, `SMORES_MQTT_PORT`, `SMORES_BASE_TOPIC`,
 `SMORES_MOCK` (`0` disables the mock publisher), `SMORES_STALE_SECS`,
-`SMORES_CONFIG` (path to the TOML file).
+`SMORES_CONFIG` (path to the TOML file), `SMORES_DB` (SQLite history path,
+default `smores.db`).

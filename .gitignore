@@ -51,6 +51,12 @@ lcov.info
 .DS_Store
 Thumbs.db
 
+# ---------- Local data ----------
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
 # ---------- Containers & misc ----------
 docker-data/
 *.tar
