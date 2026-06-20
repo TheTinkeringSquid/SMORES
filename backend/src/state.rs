@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use serde_json::Value;
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, RwLock};
 
 use crate::config::Thresholds;
 use crate::history::{History, HistoryRow};
@@ -67,6 +67,10 @@ pub struct AppState {
     pub node_stale: HashMap<String, i64>,
     /// Optional SQLite history (None if the DB failed to open).
     pub history: Option<History>,
+    /// Broadcasts the key of whatever just changed (`battery`/`tanks`/`tpms`/
+    /// `nodes`/`alerts`) to SSE subscribers, so the dashboard can refetch on
+    /// change instead of only on a timer.
+    pub events: broadcast::Sender<String>,
 }
 
 const MAX_ALERTS: usize = 200;
@@ -78,13 +82,21 @@ impl AppState {
         node_stale: HashMap<String, i64>,
         history: Option<History>,
     ) -> Self {
+        let (events, _) = broadcast::channel(128);
         Self {
             inner: RwLock::default(),
             stale_after_secs,
             thresholds,
             node_stale,
             history,
+            events,
         }
+    }
+
+    /// Notify SSE subscribers that `key` changed. Errors (no subscribers) are
+    /// ignored — events are best-effort and the dashboard has a polling fallback.
+    fn notify(&self, key: &str) {
+        let _ = self.events.send(key.to_string());
     }
 
     /// Snapshot current numeric readings into the history DB. Called on a timer;
@@ -194,6 +206,7 @@ impl AppState {
             ..
         } = env;
 
+        let event_key = subsystem.clone();
         match subsystem.as_str() {
             "battery" => match serde_json::from_value::<Battery>(data) {
                 Ok(b) => store.battery = Some(Stamped::new(b, node_id, source, timestamp)),
@@ -215,6 +228,9 @@ impl AppState {
         }
 
         Self::evaluate(&mut store, &self.thresholds, &self.node_stale, self.stale_after_secs);
+        drop(store);
+        self.notify(&event_key);
+        self.notify("alerts");
     }
 
     pub async fn apply_health(&self, health: Health) {
@@ -225,12 +241,16 @@ impl AppState {
         if let Some(rec) = store.nodes.get_mut(&node_id) {
             rec.health = Some(health);
         }
+        drop(store);
+        self.notify("nodes");
     }
 
     /// Apply an externally-published alert (from a node or `system/alerts`).
     pub async fn apply_alert(&self, alert: Alert) {
         let mut store = self.inner.write().await;
         Self::upsert(&mut store, alert);
+        drop(store);
+        self.notify("alerts");
     }
 
     /// Periodic re-evaluation so node-offline alerts fire even when no telemetry
