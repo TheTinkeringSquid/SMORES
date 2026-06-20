@@ -2,14 +2,17 @@
 //! (no loosely-typed JSON blobs). Each subsystem view carries `node_id`,
 //! `source`, `timestamp`, and a computed `stale` flag.
 
+use std::convert::Infallible;
 use std::sync::Arc;
 
 use axum::{
     extract::{Query, State},
+    response::sse::{Event as SseEvent, KeepAlive, Sse},
     routing::get,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::history::HistoryPoint;
@@ -31,6 +34,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/nodes", get(nodes))
         .route("/api/v1/alerts", get(alerts))
         .route("/api/v1/history", get(history))
+        .route("/api/v1/stream", get(stream))
         .with_state(state)
         .layer(cors)
 }
@@ -208,4 +212,18 @@ async fn history(
     let since = q.since.unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string());
     let limit = q.limit.unwrap_or(500).clamp(1, 5000);
     Json(h.query(&subsystem, &metric, &since, limit).await)
+}
+
+/// Server-sent events. Emits an `update` event whose data is the key of the
+/// subsystem that changed (`battery`/`tanks`/`tpms`/`nodes`/`alerts`); the
+/// dashboard refetches that data on receipt. A polling fallback covers any gaps.
+async fn stream(
+    State(state): State<Arc<AppState>>,
+) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
+    let rx = state.events.subscribe();
+    let events = BroadcastStream::new(rx).filter_map(|msg| {
+        msg.ok()
+            .map(|key| Ok::<_, Infallible>(SseEvent::default().event("update").data(key)))
+    });
+    Sse::new(events).keep_alive(KeepAlive::default())
 }

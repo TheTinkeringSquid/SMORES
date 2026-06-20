@@ -104,6 +104,19 @@ GET /history?subsystem=battery&metric=soc_percent&limit=200
 ]
 ```
 
+### `GET /stream`
+Server-sent events. Emits an `update` event whose `data` is the key of the
+subsystem that just changed (`battery` / `tanks` / `tpms` / `nodes` / `alerts`).
+The dashboard refetches the matching data on receipt; the 15s query poll is the
+fallback if the stream drops.
+
+```
+GET /stream          (Content-Type: text/event-stream)
+
+event: update
+data: battery
+```
+
 ## Alert engine
 
 The backend derives alerts from the latest readings and node liveness, raising
