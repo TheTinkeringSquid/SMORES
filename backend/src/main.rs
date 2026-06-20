@@ -45,6 +45,8 @@ async fn main() -> anyhow::Result<()> {
         cfg.thresholds.clone(),
         node_stale,
         history,
+        cfg.system_name.clone(),
+        cfg.nodes.clone(),
     ));
 
     // MQTT ingress: keeps the state store fresh from telemetry/health/alerts.
