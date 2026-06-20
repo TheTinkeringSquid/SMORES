@@ -3,6 +3,7 @@
 // connectivity needs — instead of hand-rolled useEffect per card.
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import type { HistoryPoint } from "./types";
 
 const BASE: string =
   import.meta.env.VITE_API_BASE ?? "http://localhost:8080/api/v1";
@@ -19,5 +20,19 @@ export function useApi<T>(key: string, path: string): UseQueryResult<T, Error> {
     queryKey: [key],
     queryFn: ({ signal }) => getJson<T>(path, signal),
     refetchInterval: 3000,
+  });
+}
+
+/** Trend history for one subsystem+metric, polled for the sparklines. */
+export function useHistory(
+  subsystem: string,
+  metric: string,
+  limit = 60,
+): UseQueryResult<HistoryPoint[], Error> {
+  const path = `/history?subsystem=${encodeURIComponent(subsystem)}&metric=${encodeURIComponent(metric)}&limit=${limit}`;
+  return useQuery<HistoryPoint[], Error>({
+    queryKey: ["history", subsystem, metric],
+    queryFn: ({ signal }) => getJson<HistoryPoint[]>(path, signal),
+    refetchInterval: 5000,
   });
 }

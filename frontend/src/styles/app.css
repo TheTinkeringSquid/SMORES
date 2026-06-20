@@ -283,3 +283,32 @@ body {
 .dot--off {
   background: var(--crit);
 }
+
+/* ---------- Sparklines ---------- */
+.spark-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+  color: var(--accent);
+}
+.spark {
+  display: block;
+  overflow: visible;
+}
+.spark-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+.spark-wrap--gray {
+  color: #9aa6b2;
+}
+.spark-wrap--black {
+  color: #6b7280;
+}
+.spark-wrap--propane {
+  color: var(--warn);
+}
+.spark-wrap--fuel {
+  color: #c084fc;
+}
