@@ -4,7 +4,7 @@
   "service": "dev",
   "workspaceFolder": "/workspaces/smores",
   "features": {
-    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+    "ghcr.io/devcontainers/features/node:2": { "version": "20" },
     "ghcr.io/devcontainers/features/rust:1": { "profile": "default" }
   },
   "forwardPorts": [8080, 5173, 1883],
