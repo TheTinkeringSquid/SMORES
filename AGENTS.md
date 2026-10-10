@@ -1,5 +1,5 @@
 # S.M.O.R.E.S. — Agent Instructions (Claude + Codex)
-<!-- CLAUDE.md and AGENTS.md are identical; edit both together. Router, not a diary: keep under ~100 lines. -->
+<!-- Single instruction file for Claude and Codex. CLAUDE.md only imports it (@AGENTS.md): edit THIS file, never CLAUDE.md. Router, not a diary: keep under ~100 lines. -->
 
 ## What this is
 **Smart Management of Onboard Resources, Electronics, and Systems**: an open-source (MIT), **offline-first** smart hub for RVs and vans.
